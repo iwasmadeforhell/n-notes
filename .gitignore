@@ -3,3 +3,4 @@ build/
 release.keystore
 *.apk
 *.sha256
+*.idsig
