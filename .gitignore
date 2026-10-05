@@ -1,0 +1,5 @@
+.sdk/
+build/
+release.keystore
+*.apk
+*.sha256
