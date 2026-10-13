@@ -8,9 +8,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInstaller;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -29,6 +32,7 @@ public class Main extends Activity {
   static final String DL_PREFIX = "https://github.com/" + REPO + "/releases/download/";
   static final String ACTION = "nnotes.INSTALL_RESULT";
   WebView w;
+  String pApk, pSha, pTag;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -40,6 +44,7 @@ public class Main extends Activity {
     w.getSettings().setDomStorageEnabled(true);
     w.setWebChromeClient(new WebChromeClient());
     setContentView(w);
+    w.addJavascriptInterface(new Bridge(), "Android");
     w.loadUrl("file:///android_asset/index.html");
 
     IntentFilter f = new IntentFilter(ACTION);
@@ -83,34 +88,83 @@ public class Main extends Activity {
     return o.toString("UTF-8");
   }
 
-  void checkUpdate() {
+  // status: latest | available | error
+  JSONObject lookup() {
+    JSONObject r = new JSONObject();
     try {
       String cur = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+      r.put("current", cur);
       JSONObject rel = new JSONObject(get("https://api.github.com/repos/" + REPO + "/releases/latest"));
-      final String tag = rel.getString("tag_name");
-      if (!newer(tag, cur)) return;
+      String tag = rel.getString("tag_name");
+      r.put("tag", tag);
+      if (!newer(tag, cur)) { r.put("status", "latest"); return r; }
       String apk = null, sha = null;
       JSONArray as = rel.getJSONArray("assets");
       for (int i = 0; i < as.length(); i++) {
-        JSONObject a = as.getJSONObject(i);
-        String u = a.getString("browser_download_url");
+        String u = as.getJSONObject(i).getString("browser_download_url");
         if (!u.startsWith(DL_PREFIX)) continue;
         if (u.endsWith(".apk")) apk = u;
         if (u.endsWith(".apk.sha256")) sha = u;
       }
-      if (apk == null || sha == null) return;
-      final String fa = apk, fs = sha;
+      if (apk == null || sha == null) { r.put("status", "error"); r.put("msg", "Release " + tag + " has no APK/checksum"); return r; }
+      pApk = apk; pSha = sha; pTag = tag;
+      r.put("status", "available");
+    } catch (Exception e) {
+      try { r.put("status", "error"); r.put("msg", String.valueOf(e)); } catch (Exception x) {}
+    }
+    return r;
+  }
+
+  void checkUpdate() {
+    JSONObject r = lookup();
+    if (!"available".equals(r.optString("status"))) return;
+    final String fa = pApk, fs = pSha, tag = pTag;
+    runOnUiThread(new Runnable() { public void run() {
+      new AlertDialog.Builder(Main.this).setTitle("Update available")
+        .setMessage("N.Notes " + tag + " is ready. Your data stays.")
+        .setNegativeButton("Later", null)
+        .setPositiveButton("Update", new android.content.DialogInterface.OnClickListener() {
+          public void onClick(android.content.DialogInterface d, int x) {
+            toast("Downloading update...");
+            new Thread(new Runnable() { public void run() { install(fa, fs); } }).start();
+          } }).show();
+    } });
+  }
+
+  // exposed to the page as window.Android
+  class Bridge {
+    @JavascriptInterface public String info() {
+      try {
+        android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+        JSONObject o = new JSONObject();
+        o.put("version", pi.versionName);
+        o.put("code", Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode);
+        o.put("pkg", getPackageName());
+        o.put("android", Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
+        o.put("device", Build.MANUFACTURER + " " + Build.MODEL);
+        o.put("repo", REPO);
+        o.put("installed", pi.lastUpdateTime);
+        return o.toString();
+      } catch (Exception e) { return "{}"; }
+    }
+    @JavascriptInterface public void check() {
+      new Thread(new Runnable() { public void run() {
+        final JSONObject r = lookup();
+        runOnUiThread(new Runnable() { public void run() { w.evaluateJavascript("onUpd(" + r.toString() + ")", null); } });
+      } }).start();
+    }
+    @JavascriptInterface public void install() {
+      if (pApk == null) return;
+      toast("Downloading update...");
+      final String a = pApk, h = pSha;
+      new Thread(new Runnable() { public void run() { Main.this.install(a, h); } }).start();
+    }
+    @JavascriptInterface public void copy(final String t) {
       runOnUiThread(new Runnable() { public void run() {
-        new AlertDialog.Builder(Main.this).setTitle("Update available")
-          .setMessage("N.Notes " + tag + " is ready. Your data stays.")
-          .setNegativeButton("Later", null)
-          .setPositiveButton("Update", new android.content.DialogInterface.OnClickListener() {
-            public void onClick(android.content.DialogInterface d, int x) {
-              toast("Downloading update...");
-              new Thread(new Runnable() { public void run() { install(fa, fs); } }).start();
-            } }).show();
+        ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("N.Notes", t));
+        toast("Copied");
       } });
-    } catch (Exception e) { /* offline or no release: ignore */ }
+    }
   }
 
   void toast(final String s) {

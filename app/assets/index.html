@@ -47,7 +47,7 @@ h3{margin:0 0 8px;font-size:16px;display:flex;justify-content:space-between}
 .up{color:#7be0a0}.dn{color:#ff7b7b}.cmp{font-size:13px;margin:-2px 0 8px;color:var(--m)}
 .arrow{background:none;border:0;font-size:22px;padding:6px 12px;color:var(--m)}
 </style></head><body>
-<header><svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#141822"/><path d="M26 72V28L58 72V28" fill="none" stroke="#c3b1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="76" cy="70" r="6" fill="#fff"/></svg><button id="t0" class="on">To-do</button><button id="t1">Gym</button></header>
+<header><svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#141822"/><path d="M26 72V28L58 72V28" fill="none" stroke="#c3b1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="76" cy="70" r="6" fill="#fff"/></svg><button id="t0" class="on">To-do</button><button id="t1">Gym</button><button id="t2" style="flex:none;padding:10px 14px" aria-label="Settings">⚙</button></header>
 <main id="v"></main><div id="toast"><span></span><button>Undo</button></div>
 <script>
 const $=s=>document.querySelector(s);
@@ -74,12 +74,48 @@ D.ex.forEach(e=>{if(e.note){let d='';D.log.forEach(x=>{if(x.ex==e.id&&x.date>d)d
 const save=()=>{try{localStorage.setItem('nn',JSON.stringify(D))}catch(e){}};
 let tab=0,sel=iso(new Date()),cur=new Date();cur.setDate(1);
 let gdate=iso(new Date());let today0=gdate;
-$('#t0').onclick=()=>{tab=0;render()};$('#t1').onclick=()=>{tab=1;render()};
+$('#t0').onclick=()=>{tab=0;render()};$('#t1').onclick=()=>{tab=1;render()};$('#t2').onclick=()=>{tab=2;render()};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function render(){
-  $('#t0').className=tab?'':'on';$('#t1').className=tab?'on':'';
-  tab?gym():todo();
+  $('#t0').className=tab==0?'on':'';$('#t1').className=tab==1?'on':'';$('#t2').className=tab==2?'on':'';
+  tab==2?settings():tab?gym():todo();
+}
+let upd=null,checking=false;
+function onUpd(r){checking=false;r.at=Date.now();upd=r;try{localStorage.setItem('nnupd',JSON.stringify(r))}catch(e){}if(tab==2)render()}
+function settings(){
+  let I={};try{I=JSON.parse(window.Android.info())}catch(e){}
+  let last=upd;if(!last){try{last=JSON.parse(localStorage.getItem('nnupd'))}catch(e){}}
+  let raw='';try{raw=localStorage.getItem('nn')||''}catch(e){}
+  const row=(k,v)=>`<div class="item"><span>${k}</span><b>${esc(v)}</b></div>`;
+  let st;
+  if(checking)st='Checking\u2026';
+  else if(last){const when=last.at?new Date(last.at).toLocaleString('en'):'';
+    st=last.status=='available'?`Update <b>${esc(last.tag)}</b> available`:last.status=='latest'?`Up to date (latest release ${esc(last.tag)})`:`Check failed: ${esc(last.msg||'unknown')}`;
+    if(when)st+=`<div class="hint">${when}</div>`}
+  else st='Not checked yet';
+  const canInstall=last&&last.status=='available'&&upd;
+  $('#v').innerHTML=`<div class="card"><h3>Version</h3>
+    ${row('App version',I.version||'n/a (browser)')}${row('Build code',I.code!=null?I.code:'n/a')}${row('Package',I.pkg||'n/a')}
+    ${row('Android',I.android||'n/a')}${row('Device',I.device||'n/a')}${row('Updates from',I.repo||'n/a')}
+    ${row('Installed',I.installed?new Date(I.installed).toLocaleString('en'):'n/a')}</div>
+  <div class="card"><h3>Updates</h3><div style="margin-bottom:10px">${st}</div>
+    <div class="row"><button class="btn" id="uc">${checking?'Checking\u2026':'Check for updates'}</button>
+    ${canInstall?'<button class="btn" id="ui">Install '+esc(last.tag)+'</button>':''}</div></div>
+  <div class="card"><h3>Data</h3>
+    ${row('Exercises',D.ex.length)}${row('Logged sets',D.log.length)}${row('Training days',new Set(D.log.map(x=>x.date)).size)}
+    ${row('Day notes',Object.keys(D.notes).length)}${row('To-dos',D.todos.length)}${row('Storage',(raw.length/1024).toFixed(1)+' KB')}
+    <div class="row"><button class="btn" id="ue">Copy data (JSON)</button></div>
+    <div class="hint">Data lives only on this phone. Copy it somewhere safe before uninstalling.</div></div>
+  <div class="card"><h3>Debug</h3>
+    ${row('Today',iso(new Date()))}${row('Gym date',gdate)}${row('Screen',innerWidth+'\u00d7'+innerHeight)}
+    <div class="row"><button class="btn" id="ur">Reload app</button></div></div>`;
+  $('#uc').onclick=()=>{if(checking)return;
+    if(!window.Android){onUpd({status:'error',msg:'Not running inside the app'});return}
+    checking=true;upd=null;render();window.Android.check()};
+  if($('#ui'))$('#ui').onclick=()=>window.Android.install();
+  $('#ue').onclick=()=>{const t=JSON.stringify(D);if(window.Android)window.Android.copy(t);else if(navigator.clipboard)navigator.clipboard.writeText(t)};
+  $('#ur').onclick=()=>location.reload();
 }
 function todo(){
   const y=cur.getFullYear(),m=cur.getMonth(),first=(new Date(y,m,1).getDay()+6)%7,days=new Date(y,m+1,0).getDate();
