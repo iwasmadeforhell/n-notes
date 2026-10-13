@@ -44,6 +44,7 @@ h3{margin:0 0 8px;font-size:16px;display:flex;justify-content:space-between}
 .side{background:var(--l);border:0;border-radius:10px;padding:0 10px;color:var(--m)}
 .side.on{color:var(--a)}
 .dt{display:flex;gap:8px;align-items:center;margin:4px 0}.dt input{flex:1}
+.up{color:#7be0a0}.dn{color:#ff7b7b}.cmp{font-size:13px;margin:-2px 0 8px;color:var(--m)}
 .arrow{background:none;border:0;font-size:22px;padding:6px 12px;color:var(--m)}
 </style></head><body>
 <header><svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#141822"/><path d="M26 72V28L58 72V28" fill="none" stroke="#c3b1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="76" cy="70" r="6" fill="#fff"/></svg><button id="t0" class="on">To-do</button><button id="t1">Gym</button></header>
@@ -65,10 +66,14 @@ if(!D){
   s(curl,10,7,'R');s(curl,5,7,'R');s(curl,5,7,'L');s(curl,5,7,'L');s(zer,5,80);
   D={todos:[],ex:[chest,lat,pull,curl,zer,leg],log:L};
 }
+const SEEDDAY='2026-10-04';
+// notes are per day now: D.notes['date|exerciseId']; an old per-exercise note moves to that exercise's latest logged day
+if(!D.notes)D.notes={};
+D.ex.forEach(e=>{if(e.note){let d='';D.log.forEach(x=>{if(x.ex==e.id&&x.date>d)d=x.date});
+  const k=(d||SEEDDAY)+'|'+e.id;if(!D.notes[k])D.notes[k]=e.note;e.note=''}});
 const save=()=>{try{localStorage.setItem('nn',JSON.stringify(D))}catch(e){}};
 let tab=0,sel=iso(new Date()),cur=new Date();cur.setDate(1);
-let gdate=iso(new Date());
-const SEEDDAY='2026-10-04';
+let gdate=iso(new Date());let today0=gdate;
 $('#t0').onclick=()=>{tab=0;render()};$('#t1').onclick=()=>{tab=1;render()};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -99,19 +104,39 @@ const sideState={};let armed=null,tt;
 function undo(msg,fn){const t=$('#toast');t.firstChild.textContent=msg;t.style.display='flex';
   t.lastChild.onclick=()=>{clearTimeout(tt);t.style.display='none';fn()};clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',6000)}
 function lastSet(e){const l=D.log.filter(x=>x.ex==e.id&&x.date<=gdate);return l[l.length-1]}
+const sgn=n=>(n>0?'+':'')+n;
+const pct=(a,b)=>b>0?Math.round((a-b)/b*100):null;
+const vol=l=>l.reduce((t,x)=>t+x.reps*x.kg,0),reps=l=>l.reduce((t,x)=>t+x.reps,0),top=l=>Math.max(0,...l.map(x=>x.kg));
+function prevSess(e){let d='';D.log.forEach(x=>{if(x.ex==e.id&&x.date<gdate&&x.date>d)d=x.date});
+  return d?{date:d,sets:D.log.filter(x=>x.ex==e.id&&x.date==d)}:null}
+const cls=n=>n>0?'up':n<0?'dn':'';
+function setDelta(s,p){if(!p)return '';const parts=[],dr=s.reps-p.reps;
+  if(dr)parts.push(sgn(dr)+' reps');
+  const pv=p.reps*p.kg,v=s.reps*s.kg,c=pct(v,pv);if(c!==null&&(s.kg!=p.kg||dr))parts.push(sgn(c)+'%');
+  return parts.length?` <small class="${cls(dr||(c||0))}">${parts.join(' · ')}</small>`:''}
+function compare(e,sets,ps){
+  if(!ps||!sets.length)return '';
+  const when=new Date(ps.date+'T12:00').toLocaleDateString('en',{day:'numeric',month:'short'});
+  const dr=reps(sets)-reps(ps.sets),dk=Math.round((top(sets)-top(ps.sets))*100)/100,pv=vol(ps.sets);
+  const c=pv>0?pct(vol(sets),pv):pct(reps(sets),reps(ps.sets));
+  const parts=[`reps <span class="${cls(dr)}">${sgn(dr)}</span>`];
+  if(c!==null)parts.push(`${pv>0?'volume':'total'} <span class="${cls(c)}">${sgn(c)}%</span>`);
+  if(top(ps.sets)>0)parts.push(`top <span class="${cls(dk)}">${sgn(dk)}kg</span>`);
+  return `<div class="cmp">vs ${when}: ${parts.join(' · ')}</div>`}
 function gym(){
   armed=null;
   const cards=D.ex.map(e=>{
     const sets=D.log.map((x,i)=>({...x,i})).filter(x=>x.ex==e.id&&x.date==gdate);
-    const ls=lastSet(e);
+    const ls=lastSet(e),ps=prevSess(e),nk=gdate+'|'+e.id;
     const hasSide=sets.some(s=>s.side)||sideState[e.id];
     return `<div class="card"><h3>${esc(e.name)}<button class="x" data-del="${e.id}">✕</button></h3>
-    <div class="sets">${sets.map((s,n)=>`<span class="set">${n+1}. ${s.reps}×${s.kg}kg${s.side?` <small>${s.side}</small>`:''}<button class="x" data-rm="${s.i}">✕</button></span>`).join('')||'<span class="hint">No sets this day</span>'}</div>
+    <div class="sets">${sets.map((s,n)=>`<span class="set">${n+1}. ${s.reps}×${s.kg}kg${s.side?` <small>${s.side}</small>`:''}${setDelta(s,ps&&ps.sets[n])}<button class="x" data-rm="${s.i}">✕</button></span>`).join('')||'<span class="hint">No sets this day</span>'}</div>
+    ${compare(e,sets,ps)}
     <div class="row" style="align-items:center"><input class="n" type="number" inputmode="numeric" placeholder="reps" id="r${e.id}" value="${ls?ls.reps:''}">×
       <input class="n" type="number" inputmode="decimal" placeholder="kg" id="k${e.id}" value="${ls?ls.kg:''}">
       ${hasSide?`<button class="side on" data-side="${e.id}" id="s${e.id}">${sideState[e.id]||(sets.length&&sets[sets.length-1].side)||'R'}</button>`:`<button class="side" data-tog="${e.id}">L/R</button>`}
       <button class="btn" data-add="${e.id}">+ Set</button></div>
-    <input class="note" data-note="${e.id}" placeholder="note" value="${esc(e.note)}"></div>`}).join('');
+    <input class="note" data-note="${e.id}" placeholder="note" value="${esc(D.notes[nk]||'')}"></div>`}).join('');
   $('#v').innerHTML=`<div class="dt"><button class="arrow" id="gp">‹</button><input type="date" id="gd" value="${gdate}"><button class="arrow" id="gn">›</button></div>${cards}
   <div class="row"><input id="ne" placeholder="New exercise"><button class="btn" id="na">Add</button></div>`;
   const shift=n=>{const d=new Date(gdate+'T12:00');d.setDate(d.getDate()+n);gdate=iso(d);render()};
@@ -126,13 +151,14 @@ function gym(){
     const r=$('#r'+id).value,k=$('#k'+id).value;
     sideState[id]=b.textContent=='R'?'L':'R';render();
     $('#r'+id).value=r;$('#k'+id).value=k});
-  document.querySelectorAll('[data-note]').forEach(i=>i.onchange=()=>{D.ex.find(e=>e.id==i.dataset.note).note=i.value;save()});
+  document.querySelectorAll('[data-note]').forEach(i=>i.onchange=()=>{const k=gdate+'|'+i.dataset.note,v=i.value.trim();if(v)D.notes[k]=v;else delete D.notes[k];save()});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(armed!=b.dataset.del){armed=b.dataset.del;b.textContent='Delete?';b.className='x arm';return}
-    armed=null;D.ex=D.ex.filter(e=>e.id!=b.dataset.del);D.log=D.log.filter(x=>x.ex!=b.dataset.del);save();render()});
+    armed=null;D.ex=D.ex.filter(e=>e.id!=b.dataset.del);D.log=D.log.filter(x=>x.ex!=b.dataset.del);Object.keys(D.notes).forEach(k=>{if(k.endsWith('|'+b.dataset.del))delete D.notes[k]});save();render()});
   const add=()=>{const v=$('#ne').value.trim();if(!v)return;D.ex.push({id:'e'+Date.now(),name:v,note:''});save();render()};
   $('#na').onclick=add;
 }
 save();
-if(!D.log.some(x=>x.date==gdate)&&D.log.some(x=>x.date==SEEDDAY))gdate=SEEDDAY;
+document.addEventListener('visibilitychange',()=>{const t=iso(new Date());if(document.hidden||t==today0)return;
+  if(gdate==today0)gdate=t;if(sel==today0){sel=t;cur=new Date();cur.setDate(1)}today0=t;render()});
 render();
 </script></body></html>
