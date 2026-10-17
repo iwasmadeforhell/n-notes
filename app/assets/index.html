@@ -50,12 +50,20 @@ h3{margin:0 0 8px;font-size:16px;display:flex;justify-content:space-between}
 <header><svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#141822"/><path d="M26 72V28L58 72V28" fill="none" stroke="#c3b1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="76" cy="70" r="6" fill="#fff"/></svg><button id="t0" class="on">To-do</button><button id="t1">Gym</button><button id="t2" style="flex:none;padding:10px 14px" aria-label="Settings">⚙</button></header>
 <main id="v"></main><div id="toast"><span></span><button>Undo</button></div>
 <script>
+// any uncaught error is shown on screen instead of leaving a blank page
+function fail(e){const v=document.getElementById('v');if(!v)return;
+  let raw='';try{raw=localStorage.getItem('nn')||''}catch(x){}
+  v.innerHTML='<div class="card"><h3>Something broke</h3><div class="hint" style="white-space:pre-wrap;word-break:break-all"></div><div class="row"><button class="btn" id="fc">Copy error + data</button><button class="btn" id="fr">Reload</button></div></div>';
+  const msg=String(e&&e.stack||e);v.querySelector('.hint').textContent=msg;
+  v.querySelector('#fc').onclick=()=>{const t=msg+'\n\n'+raw;if(window.Android)window.Android.copy(t);else if(navigator.clipboard)navigator.clipboard.writeText(t)};
+  v.querySelector('#fr').onclick=()=>location.reload()}
+window.onerror=(m,s,l,c,e)=>fail(e||m+' @'+l+':'+c);
 const $=s=>document.querySelector(s);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 let D;
 try{D=JSON.parse(localStorage.getItem('nn'))}catch(e){}
-if(!D){
+if(!D||typeof D!='object'){
   const S='2026-10-04';let id=0;
   const ex=n=>({id:'e'+(++id),name:n,note:''});
   const chest=ex('Chest press'),lat=ex('Lateral raise'),pull=ex('Lat pulldown (one hand)'),
@@ -66,6 +74,10 @@ if(!D){
   s(curl,10,7,'R');s(curl,5,7,'R');s(curl,5,7,'L');s(curl,5,7,'L');s(zer,5,80);
   D={todos:[],ex:[chest,lat,pull,curl,zer,leg],log:L};
 }
+// repair saved data with missing or wrong-typed fields instead of crashing on it
+const arr=a=>Array.isArray(a)?a.filter(x=>x&&typeof x=='object'):[];
+D.todos=arr(D.todos);D.ex=arr(D.ex);D.log=arr(D.log);
+if(!D.notes||typeof D.notes!='object'||Array.isArray(D.notes))D.notes={};
 const SEEDDAY='2026-10-04';
 // notes are per day now: D.notes['date|exerciseId']; an old per-exercise note moves to that exercise's latest logged day
 if(!D.notes)D.notes={};
@@ -79,7 +91,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 
 function render(){
   $('#t0').className=tab==0?'on':'';$('#t1').className=tab==1?'on':'';$('#t2').className=tab==2?'on':'';
-  tab==2?settings():tab?gym():todo();
+  try{tab==2?settings():tab?gym():todo()}catch(e){fail(e)}
 }
 let upd=null,checking=false;
 function onUpd(r){checking=false;r.at=Date.now();upd=r;try{localStorage.setItem('nnupd',JSON.stringify(r))}catch(e){}if(tab==2)render()}

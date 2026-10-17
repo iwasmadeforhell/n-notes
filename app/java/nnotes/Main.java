@@ -15,7 +15,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import java.io.InputStream;
@@ -42,7 +44,16 @@ public class Main extends Activity {
     w.setBackgroundColor(Color.parseColor("#0b0d12"));
     w.getSettings().setJavaScriptEnabled(true);
     w.getSettings().setDomStorageEnabled(true);
+    w.getSettings().setAllowFileAccess(true);
     w.setWebChromeClient(new WebChromeClient());
+    w.setWebViewClient(new WebViewClient() {
+      @Override public boolean shouldOverrideUrlLoading(WebView v, String u) { return !u.startsWith("file:///android_asset/"); }
+      // a dead renderer leaves a blank (or killed) app; rebuild the activity instead
+      @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail d) {
+        try { ((android.view.ViewGroup) v.getParent()).removeView(v); } catch (Exception e) {}
+        v.destroy(); recreate(); return true;
+      }
+    });
     setContentView(w);
     w.addJavascriptInterface(new Bridge(), "Android");
     w.loadUrl("file:///android_asset/index.html");
