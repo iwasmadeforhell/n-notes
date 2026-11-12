@@ -156,7 +156,7 @@ function undo(msg,fn){const t=$('#toast');t.firstChild.textContent=msg;t.style.d
 function lastSet(e){const l=D.log.filter(x=>x.ex==e.id&&x.date<=gdate);return l[l.length-1]}
 const sgn=n=>(n>0?'+':'')+n;
 const pct=(a,b)=>b>0?Math.round((a-b)/b*100):null;
-const vol=l=>l.reduce((t,x)=>t+x.reps*x.kg,0),reps=l=>l.reduce((t,x)=>t+x.reps,0),top=l=>Math.max(0,...l.map(x=>x.kg));
+const vol=l=>l.reduce((t,x)=>t+x.reps*x.kg,0),reps=l=>l.reduce((t,x)=>t+x.reps,0),topKg=l=>Math.max(0,...l.map(x=>x.kg));
 function prevSess(e){let d='';D.log.forEach(x=>{if(x.ex==e.id&&x.date<gdate&&x.date>d)d=x.date});
   return d?{date:d,sets:D.log.filter(x=>x.ex==e.id&&x.date==d)}:null}
 const cls=n=>n>0?'up':n<0?'dn':'';
@@ -167,11 +167,11 @@ function setDelta(s,p){if(!p)return '';const parts=[],dr=s.reps-p.reps;
 function compare(e,sets,ps){
   if(!ps||!sets.length)return '';
   const when=new Date(ps.date+'T12:00').toLocaleDateString('en',{day:'numeric',month:'short'});
-  const dr=reps(sets)-reps(ps.sets),dk=Math.round((top(sets)-top(ps.sets))*100)/100,pv=vol(ps.sets);
+  const dr=reps(sets)-reps(ps.sets),dk=Math.round((topKg(sets)-topKg(ps.sets))*100)/100,pv=vol(ps.sets);
   const c=pv>0?pct(vol(sets),pv):pct(reps(sets),reps(ps.sets));
   const parts=[`reps <span class="${cls(dr)}">${sgn(dr)}</span>`];
   if(c!==null)parts.push(`${pv>0?'volume':'total'} <span class="${cls(c)}">${sgn(c)}%</span>`);
-  if(top(ps.sets)>0)parts.push(`top <span class="${cls(dk)}">${sgn(dk)}kg</span>`);
+  if(topKg(ps.sets)>0)parts.push(`top <span class="${cls(dk)}">${sgn(dk)}kg</span>`);
   return `<div class="cmp">vs ${when}: ${parts.join(' · ')}</div>`}
 function gym(){
   armed=null;
