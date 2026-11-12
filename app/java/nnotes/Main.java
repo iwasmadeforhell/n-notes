@@ -170,6 +170,10 @@ public class Main extends Activity {
       final String a = pApk, h = pSha;
       new Thread(new Runnable() { public void run() { Main.this.install(a, h); } }).start();
     }
+    @JavascriptInterface public void store(String s) {
+      if (s != null && s.length() > 2) getSharedPreferences("nn", 0).edit().putString("d", s).apply();
+    }
+    @JavascriptInterface public String load() { return getSharedPreferences("nn", 0).getString("d", ""); }
     @JavascriptInterface public void copy(final String t) {
       runOnUiThread(new Runnable() { public void run() {
         ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("N.Notes", t));

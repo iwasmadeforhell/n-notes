@@ -49,6 +49,7 @@ h3{margin:0 0 8px;font-size:16px;display:flex;justify-content:space-between}
 </style></head><body>
 <header><svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#141822"/><path d="M26 72V28L58 72V28" fill="none" stroke="#c3b1ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="76" cy="70" r="6" fill="#fff"/></svg><button id="t0" class="on">To-do</button><button id="t1">Gym</button><button id="t2" style="flex:none;padding:10px 14px" aria-label="Settings">⚙</button></header>
 <main id="v"></main><div id="toast"><span></span><button>Undo</button></div>
+<script>window.onerror=function(m,s,l,c){var v=document.getElementById("v")||document.body;v.innerHTML="<pre style='color:#ff7b7b;white-space:pre-wrap;padding:12px'>Load error: "+m+" @"+l+":"+c+"</pre>"}</script>
 <script>
 // any uncaught error is shown on screen instead of leaving a blank page
 function fail(e){const v=document.getElementById('v');if(!v)return;
@@ -63,6 +64,7 @@ const pad=n=>String(n).padStart(2,'0');
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 let D;
 try{D=JSON.parse(localStorage.getItem('nn'))}catch(e){}
+if(!D||typeof D!='object'){try{D=JSON.parse(window.Android.load())}catch(e){}} // native backup
 if(!D||typeof D!='object'){
   const S='2026-10-04';let id=0;
   const ex=n=>({id:'e'+(++id),name:n,note:''});
@@ -83,7 +85,7 @@ const SEEDDAY='2026-10-04';
 if(!D.notes)D.notes={};
 D.ex.forEach(e=>{if(e.note){let d='';D.log.forEach(x=>{if(x.ex==e.id&&x.date>d)d=x.date});
   const k=(d||SEEDDAY)+'|'+e.id;if(!D.notes[k])D.notes[k]=e.note;e.note=''}});
-const save=()=>{try{localStorage.setItem('nn',JSON.stringify(D))}catch(e){}};
+const save=()=>{const j=JSON.stringify(D);try{localStorage.setItem('nn',j)}catch(e){}try{window.Android.store(j)}catch(e){}};
 let tab=0,sel=iso(new Date()),cur=new Date();cur.setDate(1);
 let gdate=iso(new Date());let today0=gdate;
 $('#t0').onclick=()=>{tab=0;render()};$('#t1').onclick=()=>{tab=1;render()};$('#t2').onclick=()=>{tab=2;render()};
