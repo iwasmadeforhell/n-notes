@@ -61,7 +61,6 @@ public class Main extends Activity {
     IntentFilter f = new IntentFilter(ACTION);
     if (Build.VERSION.SDK_INT >= 33) registerReceiver(result, f, 4); // RECEIVER_NOT_EXPORTED
     else registerReceiver(result, f);
-    new Thread(new Runnable() { public void run() { checkUpdate(); } }).start();
   }
 
   @Override protected void onDestroy() {
